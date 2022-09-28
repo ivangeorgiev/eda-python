@@ -1,0 +1,207 @@
+
+
+Command::
+
+- Service asks another service to *do something*
+- Usually synchronous
+- There might be a response to the command - usually a success or failure indicator
+- Calling service needs to know who handles the command
+
+
+Query::
+
+- Service asks another service for *data*
+- There is always a response to the query, containing the data
+- Retrieve data
+- Almost always synchronous
+- Calling service needs to know who handles the query
+
+
+## Problems with commands and queries
+
+- Performance
+** synchronous
+- Coupling
+** calling service needs to know the handling service - to properly address it (discovery)
+** changes to handling service API require changes to calling (client) service
+** replacing the handling service require changes to client service
+- Scalability
+** client service is calling a single instance of a handling service
+** if handling service instance is busy?
+*** workaround with Load Balancing
+
+## Event
+
+* Indicates that *something happened* in the system
+* There is *never a response* to an event
+
+//-
+
+Characteristics:
+
+* Something happened
+* Asynchronous by nature
+* Never returns a response
+* Calling service has no idea who handles the event
+
+
+## Contents of Event
+
+* Complete Event
+** Contains all the relevant data
+** Usually entity data
+** No additional data is required for the event processing
+* Pointer Event
+** Contains pointer to the complete data of the Entity
+** Complete data is usually stored in DB
+** Event handler needs to access the DB to retreive complete data
+
+When to use which?
+
+* Complete Event
+** Makes the event autonomous
+** Can get out of the system boundaries - might not have access to DB
+
+* Pointer Event
+** When data is large
+** Need to ensure data is up-to-date
+*** Assuming DB is a single-source-of-truth
+
+
+## Event Driven Architecture
+
+- A software architecture paradigm that uses events as the mean of communication between services
+- Three main components
+** Producer
+*** Component/Service sending the event
+*** Usually sends event reporting somehing the component done
+*** Examples:
+**** Customer Service -> _New Customer Added_ event
+**** Inventory Service -> _Item Sold Out_ event
+*** Usually uses a dedicated SDK developed by the channel vendor
+** Channel
+*** The most important component in EDA
+*** Responsible for *distributing* the events to the relevant parties
+*** The channel places the event in a specialized queue, ofen called Topic or Fanout
+*** Consumers listen to this queue and grab the event
+** Consumer
+*** The component that receives the event sent by the Producer and distributed by the Channel
+*** Can be developed in any development language compatible with the Channel's libraries (if required)
+*** Process the event
+*** Sometimes reports back when processing is complete (ACK - acknowledgement)
+*** Can get events using
+**** push
+**** pull
+
+
+## Advantages of EDA
+
+* Major problems with Command and Query:
+** Performance
+** Coupling
+** Scalability
+* Performance - Asynchronous architecture by nature
+** The channel doesn't wait for response from the consumer
+** No performance bottleneck/penalty
+* Decoupled - producer has no idea who's listening to the the event
+* Scalability - can scale (horizontally) by adding more consumers
+
+
+## EDA vs Pub/Sub
+
+Pub/Sub = Publish and Subscribe
+
+Pub/Sub:
+* 3 components
+** Publisher
+** Broker
+** Subscriber
+* A messaging pattern used by the system
+
+EDA describes the whole architecture of the system
+
+## Ordering in EDA
+
+* Messaging engines often guarantee the order of the messages
+** Traditional queue
+* With EDA (especially Pub/SUb) - ordering is not always guaranteed
+** Ordering might be affected by consumer latency, code performance and more
+** If ordering is mandatory - use channel which supports it
+
+
+## Orchestration and Choreography
+
+EDA usually employs architecture style:
+
+* Orchestration
+** Flow of events in the system is determined by a central orchestrator
+** Orchestrator receives output from components and calls the next component in the flow
+** Next component sends the output back to the Orchestrator
+** Services has no idea of the flow in the system; no idea about other services - autonomous, single responsibility
+* Choreography
+** Each component notifies about the status of events
+** Other components listen to the events and act accordingly
+
+
+
+## Event Sourcing and CQRS
+
+* EDA is mainly about Services
+* Events can be used as the basic building blocks of data too
+
+### Problems with traditional DBs
+
+* Hold data about current entity status
+** SQL and NoSQL
+* There is no way to see historical data of entities
+* Data is a snapshot of a "point in time"
+
+### Event Sourcing
+
+* Data store pattern in which every change in the data is captured and saved
+* Database stores list of changes for the entity, not the entity itself
+* No updates or deletes, just inserts
+* Every row documents a change in a property/ies of the entity
+* The database is called *Event Store*
+
+How can we view the current state of an entity? - Reply all events, related to the entity, starting from the first event.
+
+Pros:
+
+* Extremely easy to view historical data
+* Simple database structure
+* Simple database opperations (no updates, no concurrency) - very fast inserts
+
+Cons:
+
+* Viewing the current state is cumbersome and slow
+* Large database capacity (many records per entity)
+
+
+### CQRS
+
+INFO: Command and Query Responsibility Segregation
+
+- Separating commands (inserts/updates/deletes) from the queries (read)
+- Each one of them in a separate database
+- Commands DB is implemented as event store to improve performance and simplicity
+- Queries database stores entities
+- Databases are synced using a central synchronization mechanism
+** Replay entities and create entity
+** Update the Queries DB
+
+Pros::
+- Combines Event Sourcing pros with traditional entity query
+- No performance penalty when querying entities
+
+Cons::
+- Entity data is not updated in real time - there is synchronization mechanism
+- Difficult to setup and maintain
+
+
+### When to use Event Sourcing and CQRS?
+
+- When access to historical data is extremely important
+** Regulation, finance, healthcare etc.
+- When data is large and replying events is not feasible
+- When peformance is critical (inserts or queries)
